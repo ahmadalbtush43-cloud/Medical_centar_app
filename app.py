@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import os
 
 # إعدادات الصفحة
 st.set_page_config(page_title="نظام مناوبات البشير", layout="wide")
@@ -7,36 +8,48 @@ st.title("🏥 نظام توزيع أطباء الإسعاف والطوارئ")
 
 @st.cache_data
 def load_data():
+    # البحث عن أي ملف إكسيل في المجلد
+    files = [f for f in os.listdir('.') if f.endswith('.xlsx') or f.endswith('.csv')]
+    if not files:
+        return None, "لا يوجد ملف إكسيل في المستودع"
+    
+    target_file = files[0] # سيأخذ أول ملف إكسيل يجده
     try:
-        # قراءة الملف مع تجاوز أول 15 سطر (الترويسة الإدارية)
-        df = pd.read_excel("data.xlsx", header=15)
-        # تنظيف الأعمدة التي لا تحتوي على أسماء أو بيانات
-        df = df.dropna(how='all', axis=1).dropna(how='all', axis=0)
-        return df
+        if target_file.endswith('.csv'):
+            df = pd.read_csv(target_file)
+        else:
+            # محاولة القراءة من عدة أسطر ترويسة لضمان الوصول للأسماء
+            df = pd.read_excel(target_file, header=15)
+        return df, target_file
     except Exception as e:
-        st.error(f"تأكد من اسم الملف data.xlsx. الخطأ: {e}")
-        return None
+        return None, str(e)
 
-df = load_data()
+df, file_name = load_data()
 
 if df is not None:
-    # قائمة الأسماء من العمود الأول
-    raw_names = df.iloc[:, 0].dropna().astype(str).unique()
-    names = sorted([n.strip() for n in raw_names if len(n.strip()) > 3])
-
-    selected_doc = st.selectbox("👤 اختر اسم الطبيب من القائمة", names)
+    st.sidebar.success(f"متصل بملف: {file_name}")
     
-    if selected_doc:
-        # البحث عن سطر الطبيب
-        result = df[df.iloc[:, 0].astype(str) == selected_doc]
-        if not result.empty:
+    # تنظيف البيانات
+    df = df.dropna(how='all', axis=1).dropna(how='all', axis=0)
+    
+    # استخراج الأسماء (العمود الأول عادة)
+    try:
+        raw_names = df.iloc[:, 0].dropna().astype(str).unique()
+        names = sorted([n.strip() for n in raw_names if "د." in n or "د " in n or len(n) > 5])
+
+        selected_doc = st.selectbox("👤 اختر اسم الطبيب من القائمة المنسدلة", ["اختر الاسم..."] + names)
+        
+        if selected_doc != "اختر الاسم...":
+            # البحث عن سطر الطبيب بمرونة
+            result = df[df.iloc[:, 0].astype(str).str.contains(selected_doc, na=False)]
             st.success(f"الجدول الخاص بـ: {selected_doc}")
             st.dataframe(result, use_container_width=True)
-        else:
-            st.warning("اختر اسماً من القائمة لعرض التفاصيل.")
-            
+    except:
+        st.warning("يرجى اختيار الاسم لعرض الجدول")
+
     st.divider()
-    with st.expander("🔍 عرض الجدول الكامل للمستشفى"):
+    with st.expander("🔍 عرض الجدول الكامل"):
         st.dataframe(df)
 else:
-    st.info("جاري مزامنة البيانات...")
+    st.error("❌ لم يتم العثور على ملف البيانات. يرجى رفع ملف الإكسيل على GitHub.")
+    st.info("نصيحة: تأكد أنك قمت برفع ملف الإكسيل في القسم الرئيسي (Main) بجانب ملف app.py")
