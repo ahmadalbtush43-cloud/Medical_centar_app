@@ -2,16 +2,21 @@ import streamlit as st
 import pandas as pd
 import os
 
-st.set_page_config(page_title="نظام مناوبات البشير", layout="wide")
-st.title("🏥 نظام توزيع أطباء الإسعاف والطوارئ")
+# إعدادات الصفحة
+st.set_page_config(page_title="نظام مناوبات البشير الملون", layout="wide")
+st.title("🏥 نظام توزيع الأطباء حسب القاعات والوردينات")
 
+@st.cache_data
 def load_data():
     for file in os.listdir("."):
         if file.endswith(".xlsx") or file.endswith(".xls"):
             try:
-                # نبدأ من السطر 16 حيث تبدأ الأسماء والزونات
+                # القراءة من السطر 16 حيث تبدأ البيانات الفعلية
                 df = pd.read_excel(file, header=16)
                 df = df.dropna(how='all', axis=1).dropna(how='all', axis=0)
+                # تسمية العمود الأول بـ "الاسم" والعمود الثاني بـ "القاعة/المنطقة"
+                df.columns.values[0] = "الاسم"
+                df.columns.values[1] = "القاعة"
                 return df
             except:
                 continue
@@ -19,39 +24,44 @@ def load_data():
 
 df = load_data()
 
-if df is not None:
-    # محاولة تسمية الأعمدة بناءً على محتوى ملفك (القاعة والاسم)
-    if df.shape[1] > 0:
-        df.rename(columns={df.columns[0]: 'الاسم'}, inplace=True)
+# دالة لتلوين الصفوف بناءً على القاعة
+def color_zones(val):
+    color = ''
+    if 'خضراء' in str(val) or 'Green' in str(val):
+        color = 'background-color: #d4edda' # أخضر فاتح
+    elif 'صفراء' in str(val) or 'Yellow' in str(val):
+        color = 'background-color: #fff3cd' # أصفر فاتح
+    elif 'إنعاش' in str(val) or 'Resuscitation' in str(val):
+        color = 'background-color: #f8d7da' # أحمر فاتح (للإنعاش)
+    elif 'حمراء' in str(val) or 'Red' in str(val):
+        color = 'background-color: #f8d7da'
+    return color
 
-    tab1, tab2 = st.tabs(["👤 ابحث عن اسمك (وقاعتك)", "📊 الجدول الكامل"])
+if df is not None:
+    tab1, tab2 = st.tabs(["👤 بحث بالاسم (تحديد القاعة)", "📊 الجدول الكامل الملون"])
 
     with tab1:
-        st.subheader("ابحث عن اسمك لمعرفة يومك و(القاعة) المخصصة لك")
-        
-        all_names = df['الاسم'].dropna().astype(str).unique()
+        st.subheader("ابحث عن اسمك لمعرفة قاعتك ووقت دوامك")
+        all_names = df["الاسم"].dropna().astype(str).unique()
         names = sorted([n.strip() for n in all_names if len(n.strip()) > 3])
         
-        selected_doc = st.selectbox("اختر اسم الطبيب", ["اختر..."] + names)
+        selected_doc = st.selectbox("اختر اسم الطبيب", ["اختر من القائمة..."] + names)
         
-        if selected_doc != "اختر...":
-            # البحث عن سطر الطبيب
-            result = df[df['الاسم'].astype(str) == selected_doc]
-            
+        if selected_doc != "اختر من القائمة...":
+            result = df[df["الاسم"].astype(str) == selected_doc]
             if not result.empty:
-                st.success(f"تم العثور على بيانات الطبيب: {selected_doc}")
-                
-                # إظهار القاعة (غالباً العمود الأول أو الثاني يحتوي على الزون)
-                # سنعرض الصف بالكامل ليتمكن من رؤية التقسيم
-                st.dataframe(result, use_container_width=True)
-                
-                # رسالة توضيحية بناءً على محتوى الملف
-                st.info("💡 ملاحظة: انظر إلى الأعمدة الأولى في الجدول أعلاه؛ ستجد اسم 'القاعة' (خضراء، صفراء، إنعاش) بجانب اسمك مباشرة.")
+                # تطبيق التلوين على نتيجة البحث
+                st.success(f"النتيجة للطبيب: {selected_doc}")
+                st.style.apply(lambda x: [color_zones(result.iloc[0, 1])] * len(x), axis=1)
+                st.table(result) # عرض الجدول ليكون واضحاً وثابتاً
             else:
-                st.warning("يرجى التأكد من اختيار الاسم الصحيح.")
+                st.warning("لم يتم العثور على بيانات.")
 
     with tab2:
-        st.subheader("معاينة شاملة لجميع القاعات والأطباء")
-        st.dataframe(df)
+        st.subheader("الجدول الكامل مصنفاً حسب الألوان")
+        # تطبيق التلوين على كل خلية في عمود القاعة
+        styled_df = df.style.applymap(color_zones, subset=['القاعة'])
+        st.dataframe(styled_df, use_container_width=True)
+
 else:
-    st.error("لم يتم العثور على ملف data.xlsx. تأكد من رفعه في GitHub.")
+    st.error("يرجى التأكد من رفع ملف الإكسيل باسم data.xlsx")
