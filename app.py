@@ -1,15 +1,19 @@
 import streamlit as st
 import pandas as pd
 
-# إعدادات الصفحة
+# إعداد الصفحة
 st.set_page_config(page_title="نظام مناوبات البشير", layout="wide")
 st.title("🏥 نظام توزيع أطباء الإسعاف والطوارئ - مستشفيات البشير")
 
 @st.cache_data
 def load_data():
     try:
-        # قراءة ملف الإكسيل وتجاهل أول 10 أسطر إدارية
-        df = pd.read_excel("data.xlsx", header=10)
+        # تحميل الملف وتجاوز الأسطر الإدارية في الأعلى
+        df = pd.read_excel("data.xlsx", header=16) 
+        # حذف الأعمدة الفارغة تماماً
+        df = df.dropna(how='all', axis=1)
+        # تسمية العمود الأول بـ "الاسم" إذا لم يكن مسمى
+        df.rename(columns={df.columns[0]: 'الاسم'}, inplace=True)
         return df
     except Exception as e:
         st.error(f"تأكد من وجود ملف باسم data.xlsx. الخطأ: {e}")
@@ -18,35 +22,33 @@ def load_data():
 df = load_data()
 
 if df is not None:
-    tab1, tab2 = st.tabs(["👤 بحث بالاسم (متى دوامي؟)", "🔍 عرض الجدول الكامل"])
+    tab1, tab2 = st.tabs(["👤 بحث بالاسم", "🔍 الجدول كاملاً"])
 
     with tab1:
-        st.subheader("اختر اسمك لمعرفة أيام مناوباتك")
+        st.subheader("ابحث عن اسمك لمعرفة أيام مناوباتك")
         
-        # استخراج قائمة الأسماء من العمود رقم 14 (الذي يحتوي الأسماء في ملفك)
-        # قمنا بتنظيفها من أي قيم فارغة أو نصوص غير ضرورية
-        if df.shape[1] > 14:
-            raw_names = df.iloc[:, 14].dropna().astype(str).unique()
-            names = sorted([n.strip() for n in raw_names if len(n.strip()) > 5])
+        # استخراج الأسماء من أول عمود وتنظيفها
+        all_names = df.iloc[:, 0].dropna().astype(str).unique()
+        names = sorted([n.strip() for n in all_names if len(n.strip()) > 3])
+        
+        selected_doc = st.selectbox("اختر اسم الطبيب", names)
+        
+        if selected_doc:
+            # البحث عن الصف الخاص بالطبيب
+            result = df[df.iloc[:, 0].astype(str) == selected_doc]
             
-            selected_doc = st.selectbox("اختر اسم الطبيب من القائمة", names)
-            
-            if selected_doc:
-                # البحث عن الصفوف التي تحتوي على اسم الطبيب المختار
-                mask = df.astype(str).apply(lambda row: row.str.contains(selected_doc, na=False).any(), axis=1)
-                result = df[mask]
+            if not result.empty:
+                st.success(f"جدول المناوبات لـ: {selected_doc}")
+                # تنظيف النتيجة من القيم الفارغة قبل العرض
+                clean_result = result.dropna(how='all', axis=1)
+                st.dataframe(clean_result, use_container_width=True)
                 
-                if not result.empty:
-                    st.success(f"تم العثور على سجلات لـ: {selected_doc}")
-                    # عرض النتيجة كجدول مبسط
-                    st.dataframe(result.dropna(how='all', axis=1))
-                else:
-                    st.warning("لم يتم العثور على أيام دوام مسجلة بهذا الاسم.")
-        else:
-            st.error("يبدو أن بنية ملف الإكسيل تختلف، يرجى التأكد من رفع الملف الصحيح.")
+                st.info("ملاحظة: الأرقام في الجدول تمثل أيام الشهر (1 إلى 31) ورموز الوردينات.")
+            else:
+                st.warning("لم يتم العثور على بيانات لهذا الاسم.")
 
     with tab2:
-        st.subheader("معاينة الملف الأصلي")
+        st.subheader("معاينة الجدول العام")
         st.dataframe(df)
 else:
-    st.info("بانتظار معالجة ملف data.xlsx...")
+    st.info("يرجى التأكد من رفع ملف 'data.xlsx' على GitHub.")
