@@ -1,16 +1,16 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+import numpy as np
 
-# إعداد الصفحة
+# إعدادات الصفحة
 st.set_page_config(page_title="نظام مناوبات البشير", layout="wide")
 st.title("🏥 نظام توزيع أطباء الإسعاف والطوارئ - مستشفيات البشير")
 
 @st.cache_data
 def load_data():
     try:
-        # قراءة الملف - جربنا التحميل من السطر 11
-        df = pd.read_excel("data.xlsx", header=None)
+        # قراءة الملف بالكامل وتجاهل الترويسة الإدارية
+        df = pd.read_excel("data.xlsx")
         return df
     except Exception as e:
         st.error(f"تأكد من وجود ملف باسم data.xlsx. الخطأ: {e}")
@@ -19,30 +19,31 @@ def load_data():
 df = load_data()
 
 if df is not None:
-    tab1, tab2 = st.tabs(["🔍 بحث بالتاريخ", "👤 بحث بالاسم"])
+    tab1, tab2 = st.tabs(["👤 بحث بالاسم (متى دوامي؟)", "🔍 عرض الجدول الكامل"])
 
     with tab1:
-        st.subheader("جدول المناوبات حسب التاريخ")
-        # اختيار اليوم من 1 إلى 31 (حسب شهر 5)
-        day_selected = st.slider("اختر يوم الشهر (مايو)", 1, 31, datetime.now().day)
-        st.info(f"عرض جدول يوم {day_selected} / 5 / 2026")
-        # عرض الجدول بشكل كامل لمراجعته
-        st.dataframe(df)
-
-    with tab2:
-        st.subheader("ابحث عن اسمك لمعرفة أيام دوامك")
-        # استخلاص كل الكلمات من الجدول وتحويلها لقائمة أسماء
-        all_text = df.astype(str).values.flatten()
-        names = sorted(list(set([name for name in all_text if "د." in name or "د " in name])))
+        st.subheader("ابحث عن اسمك لمعرفة أيام مناوباتك")
+        
+        # استخراج كافة النصوص من الجدول للبحث عن الأسماء
+        all_entries = df.astype(str).values.flatten()
+        # تنقية الأسماء (أي خلية تحتوي على حرف د وبعدها مسافة أو نقطة)
+        names = sorted(list(set([str(x).strip() for x in all_entries if "د." in str(x) or "د " in str(x)])))
         
         if names:
-            selected_doc = st.selectbox("اختر اسم الطبيب", names)
-            st.success(f"نتائج البحث عن: {selected_doc}")
-            # فلترة الصفوف التي تحتوي على الاسم
-            mask = df.apply(lambda row: row.astype(str).str.contains(selected_doc).any(), axis=1)
-            result = df[mask]
-            st.table(result)
+            selected_doc = st.selectbox("اختر اسم الطبيب من القائمة", names)
+            
+            # البحث عن الصفوف التي يظهر فيها الاسم
+            mask = df.astype(str).apply(lambda row: row.str.contains(selected_doc, na=False).any(), axis=1)
+            result = df[mask].dropna(how='all', axis=1)
+            
+            st.success(f"تم العثور على اسم {selected_doc} في السجلات التالية:")
+            st.dataframe(result)
         else:
-            st.warning("لم يتم العثور على أسماء تبدأ بـ 'د.' في الملف. يرجى التأكد من محتوى الإكسيل.")
+            st.warning("لم يتم العثور على أسماء أطباء في الملف. تأكد من أن الأسماء تبدأ بـ 'د.'")
+
+    with tab2:
+        st.subheader("معاينة الجدول الأصلي")
+        st.write("يمكنك مراجعة الملف المرفوع بالكامل هنا:")
+        st.dataframe(df)
 else:
-    st.info("بانتظار معالجة البيانات...")
+    st.info("جاري تحميل البيانات من ملف data.xlsx...")
