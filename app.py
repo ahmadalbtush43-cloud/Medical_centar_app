@@ -2,48 +2,56 @@ import streamlit as st
 import pandas as pd
 import os
 
-# إعداد الصفحة
 st.set_page_config(page_title="نظام مناوبات البشير", layout="wide")
 st.title("🏥 نظام توزيع أطباء الإسعاف والطوارئ")
 
-def find_excel_file():
-    # البحث عن أي ملف ينتهي بـ xlsx أو xls في المجلد
+def load_data():
     for file in os.listdir("."):
         if file.endswith(".xlsx") or file.endswith(".xls"):
-            return file
+            try:
+                # نبدأ من السطر 16 حيث تبدأ الأسماء والزونات
+                df = pd.read_excel(file, header=16)
+                df = df.dropna(how='all', axis=1).dropna(how='all', axis=0)
+                return df
+            except:
+                continue
     return None
 
-file_path = find_excel_file()
+df = load_data()
 
-if file_path:
-    try:
-        # قراءة الملف - نبدأ من السطر 15 لتجاوز الشعارات
-        df = pd.read_excel(file_path, header=15)
-        
-        # تنظيف البيانات
-        df = df.dropna(how='all', axis=1).dropna(how='all', axis=0)
-        
-        # استخراج قائمة الأسماء (العمود الأول)
-        raw_names = df.iloc[:, 0].dropna().astype(str).unique()
-        names = sorted([n.strip() for n in raw_names if len(n.strip()) > 3])
+if df is not None:
+    # محاولة تسمية الأعمدة بناءً على محتوى ملفك (القاعة والاسم)
+    if df.shape[1] > 0:
+        df.rename(columns={df.columns[0]: 'الاسم'}, inplace=True)
 
-        selected_doc = st.selectbox("👤 اختر اسمك من القائمة لمعرفة جدولك", ["اختر اسمك من هنا..."] + names)
+    tab1, tab2 = st.tabs(["👤 ابحث عن اسمك (وقاعتك)", "📊 الجدول الكامل"])
+
+    with tab1:
+        st.subheader("ابحث عن اسمك لمعرفة يومك و(القاعة) المخصصة لك")
         
-        if selected_doc != "اختر اسمك من هنا...":
+        all_names = df['الاسم'].dropna().astype(str).unique()
+        names = sorted([n.strip() for n in all_names if len(n.strip()) > 3])
+        
+        selected_doc = st.selectbox("اختر اسم الطبيب", ["اختر..."] + names)
+        
+        if selected_doc != "اختر...":
             # البحث عن سطر الطبيب
-            result = df[df.iloc[:, 0].astype(str) == selected_doc]
-            if not result.empty:
-                st.success(f"الجدول الخاص بـ: {selected_doc}")
-                st.dataframe(result, use_container_width=True)
-            else:
-                st.warning("الرجاء اختيار اسم صحيح من القائمة.")
-        
-        st.divider()
-        with st.expander("🔍 عرض الجدول الكامل للمستشفى"):
-            st.dataframe(df)
+            result = df[df['الاسم'].astype(str) == selected_doc]
             
-    except Exception as e:
-        st.error(f"حدث خطأ أثناء قراءة الملف: {e}")
+            if not result.empty:
+                st.success(f"تم العثور على بيانات الطبيب: {selected_doc}")
+                
+                # إظهار القاعة (غالباً العمود الأول أو الثاني يحتوي على الزون)
+                # سنعرض الصف بالكامل ليتمكن من رؤية التقسيم
+                st.dataframe(result, use_container_width=True)
+                
+                # رسالة توضيحية بناءً على محتوى الملف
+                st.info("💡 ملاحظة: انظر إلى الأعمدة الأولى في الجدول أعلاه؛ ستجد اسم 'القاعة' (خضراء، صفراء، إنعاش) بجانب اسمك مباشرة.")
+            else:
+                st.warning("يرجى التأكد من اختيار الاسم الصحيح.")
+
+    with tab2:
+        st.subheader("معاينة شاملة لجميع القاعات والأطباء")
+        st.dataframe(df)
 else:
-    st.error("❌ لم يتم العثور على أي ملف إكسيل في المستودع.")
-    st.info("تأكد أنك قمت برفع ملف الإكسيل في الصفحة الرئيسية بجانب ملف app.py")
+    st.error("لم يتم العثور على ملف data.xlsx. تأكد من رفعه في GitHub.")
