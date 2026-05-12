@@ -2,67 +2,58 @@ import streamlit as st
 import pandas as pd
 import os
 
-# إعداد الصفحة وتصميم احترافي
-st.set_page_config(page_title="نظام مناوبات أطباء البشير", layout="wide")
-
-st.markdown("""
-    <style>
-    .main { background-color: #ffffff; }
-    .stAlert { border-radius: 10px; }
-    th { background-color: #f0f2f6 !省f; }
-    </style>
-    """, unsafe_allow_html=True)
-
-st.title("🏥 نظام توزيع أطباء الإسعاف والطوارئ")
-st.write("---")
+# تصميم الواجهة
+st.set_page_config(page_title="نظام مناوبات البشير", layout="wide")
+st.title("🏥 نظام توزيع أطباء الطوارئ - مستشفيات البشير")
 
 @st.cache_data
 def load_data():
-    # البحث عن أي ملف إكسيل مرفوع
     files = [f for f in os.listdir('.') if f.endswith(('.xlsx', '.xls'))]
-    if not files:
-        return None
+    if not files: return None
     try:
-        # قراءة الملف بدون تحديد هيدر (سنعالجه يدوياً)
+        # قراءة الملف بالكامل
         df = pd.read_excel(files[0])
         return df
-    except:
-        return None
+    except: return None
 
 df = load_data()
 
 if df is not None:
-    # تنظيف بدائي للبيانات
-    df_clean = df.dropna(how='all', axis=0).dropna(how='all', axis=1)
+    # قائمة القاعات الممكنة في ملفك
+    zones_keywords = ['خضراء', 'صفراء', 'حمراء', 'إنعاش', 'فرز', 'جراحة', 'عظام']
     
-    tab1, tab2 = st.tabs(["👤 بحث سريع عن طبيب", "📊 عرض الجدول الكامل"])
+    tab1, tab2 = st.tabs(["🔍 بحث بالاسم والقاعة", "📊 الجدول الكامل"])
 
     with tab1:
-        st.subheader("ابحث عن اسمك لمعرفة قاعتك ومناوبتك")
-        # تحويل كل الجدول لنصوص للبحث فيها
-        search_term = st.text_input("اكتب جزءاً من الاسم (مثلاً: حسام أو أسامة)", "")
+        search_name = st.text_input("اكتب اسم الطبيب هنا (مثلاً: حسام):", "")
         
-        if search_term:
-            # البحث في كل خلايا الجدول عن هذا الاسم
-            mask = df_clean.astype(str).apply(lambda row: row.str.contains(search_term, case=False, na=False).any(), axis=1)
-            results = df_clean[mask]
+        if search_name:
+            # البحث عن الصفوف التي تحتوي على الاسم
+            mask = df.astype(str).apply(lambda row: row.str.contains(search_name, case=False, na=False).any(), axis=1)
+            results = df[mask].copy()
             
             if not results.empty:
-                st.success(f"تم العثور على {len(results)} سجلات تطابق: {search_term}")
+                st.success(f"نتائج البحث لـ: {search_name}")
+                
+                # حركة ذكية: البحث عن "القاعة" في نفس الصف أو الصفوف القريبة
+                def find_zone(row_idx):
+                    # يبحث في أعمدة الصف المختار عن كلمة تدل على القاعة
+                    row_content = " ".join(df.iloc[row_idx].astype(str))
+                    for key in zones_keywords:
+                        if key in row_content: return key
+                    return "غير محدد"
+
+                # إضافة عمود "القاعة المتوقعة" في العرض فقط
+                results['القاعة / المنطقة'] = [find_zone(i) for i in results.index]
+                
+                # عرض النتيجة مرتبة
+                st.write("### تفاصيل الدوام:")
                 st.dataframe(results, use_container_width=True)
             else:
-                st.warning("لم يتم العثور على هذا الاسم، تأكد من كتابته بشكل صحيح.")
-        else:
-            st.info("الرجاء كتابة الاسم في مربع البحث أعلاه.")
+                st.warning("لم يتم العثور على الاسم.")
 
     with tab2:
-        st.subheader("جدول المستشفى كاملاً")
-        st.write("يمكنك سحب الجدول يميناً ويساراً لمشاهدة كافة الأيام")
-        st.dataframe(df_clean, use_container_width=True)
-
+        st.subheader("معاينة الجدول الأصلي")
+        st.dataframe(df)
 else:
-    st.error("❌ لم نجد ملف الإكسيل (data.xlsx) في المستودع.")
-    st.info("تأكد أنك قمت برفع ملف الإكسيل في الصفحة الرئيسية لـ GitHub بجانب ملف app.py")
-
-st.write("---")
-st.caption("نظام داخلي خاص بمستشفيات البشير - قسم الإسعاف والطوارئ")
+    st.error("لم يتم العثور على ملف الإكسيل.")
