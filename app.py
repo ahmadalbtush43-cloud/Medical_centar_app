@@ -1,19 +1,17 @@
 import streamlit as st
 import pandas as pd
 
-# إعداد الصفحة
+# إعدادات الصفحة
 st.set_page_config(page_title="نظام مناوبات البشير", layout="wide")
 st.title("🏥 نظام توزيع أطباء الإسعاف والطوارئ - مستشفيات البشير")
 
 @st.cache_data
 def load_data():
     try:
-        # تحميل الملف وتجاوز الأسطر الإدارية في الأعلى
-        df = pd.read_excel("data.xlsx", header=16) 
-        # حذف الأعمدة الفارغة تماماً
-        df = df.dropna(how='all', axis=1)
-        # تسمية العمود الأول بـ "الاسم" إذا لم يكن مسمى
-        df.rename(columns={df.columns[0]: 'الاسم'}, inplace=True)
+        # تحميل الملف - البدء من سطر الأسماء
+        df = pd.read_excel("data.xlsx", header=16)
+        # حذف الصفوف والأعمدة الفارغة تماماً
+        df = df.dropna(how='all', axis=0).dropna(how='all', axis=1)
         return df
     except Exception as e:
         st.error(f"تأكد من وجود ملف باسم data.xlsx. الخطأ: {e}")
@@ -22,33 +20,33 @@ def load_data():
 df = load_data()
 
 if df is not None:
-    tab1, tab2 = st.tabs(["👤 بحث بالاسم", "🔍 الجدول كاملاً"])
+    tab1, tab2 = st.tabs(["👤 بحث بالاسم", "🔍 الجدول العام"])
 
     with tab1:
         st.subheader("ابحث عن اسمك لمعرفة أيام مناوباتك")
         
-        # استخراج الأسماء من أول عمود وتنظيفها
-        all_names = df.iloc[:, 0].dropna().astype(str).unique()
-        names = sorted([n.strip() for n in all_names if len(n.strip()) > 3])
+        # استخراج الأسماء من أول عمود متوفر وتنظيفها
+        first_column = df.columns[0]
+        names = sorted(df[first_column].dropna().astype(str).unique())
         
-        selected_doc = st.selectbox("اختر اسم الطبيب", names)
+        selected_doc = st.selectbox("اختر اسم الطبيب من القائمة", names)
         
         if selected_doc:
-            # البحث عن الصف الخاص بالطبيب
-            result = df[df.iloc[:, 0].astype(str) == selected_doc]
+            # البحث بمرونة عن الاسم في العمود الأول
+            result = df[df[first_column].astype(str).str.contains(selected_doc, na=False)]
             
             if not result.empty:
                 st.success(f"جدول المناوبات لـ: {selected_doc}")
-                # تنظيف النتيجة من القيم الفارغة قبل العرض
-                clean_result = result.dropna(how='all', axis=1)
-                st.dataframe(clean_result, use_container_width=True)
+                # عرض النتيجة بشكل عرضي مريح
+                st.dataframe(result, use_container_width=True)
                 
-                st.info("ملاحظة: الأرقام في الجدول تمثل أيام الشهر (1 إلى 31) ورموز الوردينات.")
+                # إضافة تنبيه بسيط لشرح الرموز
+                st.info("💡 ملاحظة: الرموز (A, B, C) تمثل وردياتك في الأيام المذكورة في الجدول أعلاه.")
             else:
-                st.warning("لم يتم العثور على بيانات لهذا الاسم.")
+                st.warning("تعذر عرض التفاصيل لهذا الاسم، جرب اختيار اسم آخر أو مراجعة الجدول العام.")
 
     with tab2:
-        st.subheader("معاينة الجدول العام")
+        st.subheader("معاينة الجدول كاملاً")
         st.dataframe(df)
 else:
     st.info("يرجى التأكد من رفع ملف 'data.xlsx' على GitHub.")
