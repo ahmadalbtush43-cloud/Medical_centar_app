@@ -2,80 +2,90 @@ import streamlit as st
 import pandas as pd
 import os
 
-# إعدادات الصفحة بتصميم عصري
+# إعدادات الصفحة بتصميم احترافي
 st.set_page_config(page_title="نظام مناوبات البشير الذكي", layout="wide")
 
-# تصميم واجهة المستخدم بلغة CSS
+# تصميم CSS لتحسين شكل البطاقات والنتائج
 st.markdown("""
     <style>
     .main { background-color: #f8f9fa; }
-    .stTextInput>div>div>input { border-radius: 10px; border: 2px solid #007bff; }
-    .doctor-card { 
+    .stTextInput>div>div>input { border-radius: 15px; border: 2px solid #1a73e8; padding: 10px; }
+    .duty-card { 
         background-color: white; 
         padding: 20px; 
-        border-radius: 15px; 
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        border-right: 5px solid #007bff;
-        margin-bottom: 20px;
+        border-radius: 12px; 
+        box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+        border-right: 6px solid #1a73e8;
+        margin-bottom: 15px;
     }
-    .zone-badge {
-        padding: 5px 15px;
-        border-radius: 20px;
+    .zone-text { color: #1a73e8; font-weight: bold; font-size: 18px; }
+    .shift-badge { 
+        background-color: #e8f0fe; 
+        color: #1a73e8; 
+        padding: 4px 12px; 
+        border-radius: 8px; 
         font-weight: bold;
-        color: white;
     }
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🏥 نظام توزيع أطباء الإسعاف والطوارئ")
-st.write("مستشفيات البشير - الإصدار الذكي المنظم")
+st.title("🏥 نظام توزيع أطباء البشير - الإصدار الشامل")
+st.write("مايو 2026 - عرض القاعات والشفتات")
 
 @st.cache_data
 def load_data():
-    # البحث عن الملف الذي قمت برفعه
+    # البحث عن ملف البيانات (data.xlsx)
     for file in os.listdir("."):
-        if file.endswith((".xlsx", ".xls")):
+        if file.startswith("data") and file.endswith((".xlsx", ".xls")):
             try:
-                # قراءة الملف (يفترض أن الاسم في العمود الأول أو الثاني)
                 df = pd.read_excel(file)
-                return df, file
+                return df
             except:
                 continue
-    return None, None
+    return None
 
-df, file_name = load_data()
+df = load_data()
 
 if df is not None:
-    # تنظيف البيانات من الأسطر الفارغة تماماً
-    df = df.dropna(how='all', axis=0).dropna(how='all', axis=1)
-    
-    st.info(f"📁 تم تحميل الجدول بنجاح")
-
-    # البحث الذكي
-    search_query = st.text_input("🔍 اكتب اسمك هنا للبحث (مثلاً: حسام، أسامة، أحمد...)", "")
+    # محرك البحث بالاسم
+    search_query = st.text_input("🔍 ابحث عن اسمك لمعرفة قاعتك وشفتك (مثلاً: أسامة، حسام، أحمد):", "")
 
     if search_query:
-        # البحث في كافة الخلايا
-        mask = df.astype(str).apply(lambda row: row.str.contains(search_query, case=False, na=False).any(), axis=1)
-        results = df[mask]
+        # البحث بمرونة في عمود "اسم الطبيب / المقيم"
+        # تأكد أن اسم العمود في الإكسيل يطابق: "اسم الطبيب / المقيم"
+        try:
+            mask = df.iloc[:, 3].astype(str).str.contains(search_query, case=False, na=False)
+            results = df[mask]
 
-        if not results.empty:
-            for index, row in results.iterrows():
-                with st.container():
-                    st.markdown(f"""
-                    <div class="doctor-card">
-                        <h3>👨‍⚕️ تفاصيل المناوبة</h3>
-                        <p style='font-size: 18px;'><b>البيانات المستخرجة:</b></p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    st.dataframe(results.loc[[index]].dropna(axis=1), use_container_width=True)
-        else:
-            st.error("❌ لم يتم العثور على نتائج لهذا الاسم.")
-    else:
-        st.write("💡 **نصيحة:** اكتب أول حرفين من اسمك فقط لتظهر لك النتائج بسرعة.")
-
+            if not results.empty:
+                st.write(f"### ✅ تم العثور على {len(results)} مناوبات مسجلة:")
+                
+                for _, row in results.iterrows():
+                    with st.container():
+                        st.markdown(f"""
+                        <div class="duty-card">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <span class="label">📅 التاريخ:</span> <b>{row.iloc[2]}</b> | 
+                                    <span class="label">👤 الطبيب:</span> <b>{row.iloc[3]}</b>
+                                </div>
+                                <div class="shift-badge">شفت: {row.iloc[1]}</div>
+                            </div>
+                            <div style="margin-top: 10px;">
+                                📍 القاعة: <span class="zone-text">{row.iloc[0]}</span>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+            else:
+                st.error("❌ لم يتم العثور على هذا الاسم في الجدول.")
+        except Exception as e:
+            st.warning("يرجى التأكد من أن الجدول يحتوي على الأعمدة: القاعة، الشفت، التاريخ، الاسم.")
+    
     st.divider()
-    with st.expander("📊 عرض الجدول الكامل للمستشفى"):
-        st.dataframe(df)
+    with st.expander("📊 معاينة أوقات الشفتات الرسمية"):
+        st.info("A (08-16) | B (16-23) | C (23-08) | D (08-20) | [span_2](start_span)Night (20-08)")[span_2](end_span)
+        st.dataframe(df, use_container_width=True)
 else:
-    st.error("❌ لم يتم العثور على ملف الجدول (data.xlsx).")
+    st.error("❌ لم يتم العثور على ملف data.xlsx في GitHub.")
+
+st.caption("نظام داخلي - مستشفيات البشير")
