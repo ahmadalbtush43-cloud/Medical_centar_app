@@ -1,20 +1,18 @@
 import pandas as pd
+import os
 
-# قراءة ملف البيانات
-file_path = 'data.xlsx - Sheet1.csv'
-df = pd.read_csv(file_path)
+# هذا السطر يضمن أن البرنامج يبحث عن الملف في نفس المجلد الذي يوجد فيه الكود
+current_dir = os.path.dirname(os.path.abspath(__file__))
+file_name = 'data.xlsx - Sheet1.csv'  # تأكد أن الاسم مطابق تماماً للاسم في المجلد
+file_path = os.path.join(current_dir, file_name)
 
-# تنظيف البيانات (إزالة الأعمدة الفارغة إذا وجدت)
-df = df.dropna(axis=1, how='all')
-
-# عرض أول 5 أسطر للتأكد من القراءة الصحيحة
-print("نظرة عامة على البيانات:")
-print(df.head())
-
-# مثال: استخراج قائمة بالأطباء في قاعة معينة (مثلاً Triage)
-triage_doctors = df[df['اسم القاعه'].str.contains('Triage', na=False)]
-print("\nأطباء منطقة الترياج (Triage):")
-print(triage_doctors[['اسم الطبيب /المقيم', 'التاريخ']])
-
-# حفظ نسخة منظمة من البيانات إذا أردت
-# df.to_csv('cleaned_medical_data.csv', index=False)
+try:
+    # قراءة الملف مع تحديد الترميز (Encoding) لدعم اللغة العربية
+    df = pd.read_csv(file_path, encoding='utf-8-sig')
+    print("✅ تم تحميل البيانات بنجاح!")
+    print(df.head())
+except FileNotFoundError:
+    print(f"❌ خطأ: لم يتم العثور على الملف في المسار: {file_path}")
+    print("تأكد من وضع ملف الـ CSV في نفس مجلد الكود.")
+except Exception as e:
+    print(f"❌ حدث خطأ غير متوقع: {e}")
