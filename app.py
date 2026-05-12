@@ -2,58 +2,80 @@ import streamlit as st
 import pandas as pd
 import os
 
-# تصميم الواجهة
-st.set_page_config(page_title="نظام مناوبات البشير", layout="wide")
-st.title("🏥 نظام توزيع أطباء الطوارئ - مستشفيات البشير")
+# إعدادات الصفحة بتصميم عصري
+st.set_page_config(page_title="نظام مناوبات البشير الذكي", layout="wide")
+
+# تصميم واجهة المستخدم بلغة CSS
+st.markdown("""
+    <style>
+    .main { background-color: #f8f9fa; }
+    .stTextInput>div>div>input { border-radius: 10px; border: 2px solid #007bff; }
+    .doctor-card { 
+        background-color: white; 
+        padding: 20px; 
+        border-radius: 15px; 
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        border-right: 5px solid #007bff;
+        margin-bottom: 20px;
+    }
+    .zone-badge {
+        padding: 5px 15px;
+        border-radius: 20px;
+        font-weight: bold;
+        color: white;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+st.title("🏥 نظام توزيع أطباء الإسعاف والطوارئ")
+st.write("مستشفيات البشير - الإصدار الذكي المنظم")
 
 @st.cache_data
 def load_data():
-    files = [f for f in os.listdir('.') if f.endswith(('.xlsx', '.xls'))]
-    if not files: return None
-    try:
-        # قراءة الملف بالكامل
-        df = pd.read_excel(files[0])
-        return df
-    except: return None
+    # البحث عن الملف الذي قمت برفعه
+    for file in os.listdir("."):
+        if file.endswith((".xlsx", ".xls")):
+            try:
+                # قراءة الملف (يفترض أن الاسم في العمود الأول أو الثاني)
+                df = pd.read_excel(file)
+                return df, file
+            except:
+                continue
+    return None, None
 
-df = load_data()
+df, file_name = load_data()
 
 if df is not None:
-    # قائمة القاعات الممكنة في ملفك
-    zones_keywords = ['خضراء', 'صفراء', 'حمراء', 'إنعاش', 'فرز', 'جراحة', 'عظام']
+    # تنظيف البيانات من الأسطر الفارغة تماماً
+    df = df.dropna(how='all', axis=0).dropna(how='all', axis=1)
     
-    tab1, tab2 = st.tabs(["🔍 بحث بالاسم والقاعة", "📊 الجدول الكامل"])
+    st.info(f"📁 تم تحميل الجدول بنجاح")
 
-    with tab1:
-        search_name = st.text_input("اكتب اسم الطبيب هنا (مثلاً: حسام):", "")
-        
-        if search_name:
-            # البحث عن الصفوف التي تحتوي على الاسم
-            mask = df.astype(str).apply(lambda row: row.str.contains(search_name, case=False, na=False).any(), axis=1)
-            results = df[mask].copy()
-            
-            if not results.empty:
-                st.success(f"نتائج البحث لـ: {search_name}")
-                
-                # حركة ذكية: البحث عن "القاعة" في نفس الصف أو الصفوف القريبة
-                def find_zone(row_idx):
-                    # يبحث في أعمدة الصف المختار عن كلمة تدل على القاعة
-                    row_content = " ".join(df.iloc[row_idx].astype(str))
-                    for key in zones_keywords:
-                        if key in row_content: return key
-                    return "غير محدد"
+    # البحث الذكي
+    search_query = st.text_input("🔍 اكتب اسمك هنا للبحث (مثلاً: حسام، أسامة، أحمد...)", "")
 
-                # إضافة عمود "القاعة المتوقعة" في العرض فقط
-                results['القاعة / المنطقة'] = [find_zone(i) for i in results.index]
-                
-                # عرض النتيجة مرتبة
-                st.write("### تفاصيل الدوام:")
-                st.dataframe(results, use_container_width=True)
-            else:
-                st.warning("لم يتم العثور على الاسم.")
+    if search_query:
+        # البحث في كافة الخلايا
+        mask = df.astype(str).apply(lambda row: row.str.contains(search_query, case=False, na=False).any(), axis=1)
+        results = df[mask]
 
-    with tab2:
-        st.subheader("معاينة الجدول الأصلي")
+        if not results.empty:
+            for index, row in results.iterrows():
+                with st.container():
+                    st.markdown(f"""
+                    <div class="doctor-card">
+                        <h3>👨‍⚕️ تفاصيل المناوبة</h3>
+                        <p style='font-size: 18px;'><b>البيانات المستخرجة:</b></p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    st.dataframe(results.loc[[index]].dropna(axis=1), use_container_width=True)
+        else:
+            st.error("❌ لم يتم العثور على نتائج لهذا الاسم.")
+    else:
+        st.write("💡 **نصيحة:** اكتب أول حرفين من اسمك فقط لتظهر لك النتائج بسرعة.")
+
+    st.divider()
+    with st.expander("📊 عرض الجدول الكامل للمستشفى"):
         st.dataframe(df)
 else:
-    st.error("لم يتم العثور على ملف الإكسيل.")
+    st.error("❌ لم يتم العثور على ملف الجدول (data.xlsx).")
